@@ -616,7 +616,7 @@ def main():
     st.markdown(
         '<div style="text-align:center;margin-top:2rem;padding-top:1rem;'
         'border-top:1px solid #2a2a2a;color:#555;font-size:.78rem;">'
-        'Spartan FC · Se actualiza automáticamente al subir el Excel a GitHub'
+        'Spartan FC App · Es un producto desarrollado por Boris Bugueño B.'
         '</div>',
         unsafe_allow_html=True,
     )
