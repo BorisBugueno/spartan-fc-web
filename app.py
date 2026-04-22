@@ -27,6 +27,7 @@ import streamlit as st
 ROOT = Path(__file__).parent
 EXCEL_PATH = ROOT / "data" / "Resultados.xlsx"
 LOGO_PATH  = ROOT / "assets" / "Logo_Spartan.png"
+LOGO_FALLBACK = ROOT / "assets" / "Logo_Oficial.jpeg"
 SPARTAN_NAME = "Spartan F.C."
 
 
@@ -37,7 +38,9 @@ def _logo_b64(path_str: str) -> str:
     p = Path(path_str)
     if not p.exists():
         return ""
-    return base64.b64encode(p.read_bytes()).decode()
+    media = "image/png" if p.suffix == ".png" else "image/jpeg"
+    data = base64.b64encode(p.read_bytes()).decode()
+    return f"data:{media};base64,{data}"
 
 st.set_page_config(
     page_title="Spartan FC · Estadísticas",
@@ -634,10 +637,13 @@ def render_category(df: pd.DataFrame, name: str):
 
 
 def main():
-    logo_b64 = _logo_b64(str(LOGO_PATH))
+    # Intenta logo transparente, si no existe usa el original
+    logo_data = _logo_b64(str(LOGO_PATH))
+    if not logo_data:
+        logo_data = _logo_b64(str(LOGO_FALLBACK))
     logo_html = (
-        f'<img src="data:image/png;base64,{logo_b64}" alt="Spartan FC">'
-        if logo_b64 else "⚔️"
+        f'<img src="{logo_data}" alt="Spartan FC">'
+        if logo_data else "⚔️"
     )
     st.markdown(
         f'''
