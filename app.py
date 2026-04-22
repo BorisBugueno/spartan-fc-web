@@ -26,8 +26,18 @@ import streamlit as st
 
 ROOT = Path(__file__).parent
 EXCEL_PATH = ROOT / "data" / "Resultados.xlsx"
-LOGO_PATH  = ROOT / "assets" / "Logo_Oficial.jpeg"
+LOGO_PATH  = ROOT / "assets" / "Logo_Spartan.png"
 SPARTAN_NAME = "Spartan F.C."
+
+
+@st.cache_data(show_spinner=False)
+def _logo_b64(path_str: str) -> str:
+    """Embebe el logo como base64 para poder estilarlo dentro del HTML del header."""
+    import base64
+    p = Path(path_str)
+    if not p.exists():
+        return ""
+    return base64.b64encode(p.read_bytes()).decode()
 
 st.set_page_config(
     page_title="Spartan FC · Estadísticas",
@@ -57,10 +67,47 @@ CUSTOM_CSS = """
 
   h1,h2,h3,h4 { color: var(--gold) !important; font-weight: 800; }
 
-  /* Hero */
-  .hero { text-align:center; padding:.5rem 0 1.25rem; border-bottom:2px solid var(--gold); margin-bottom:1.25rem; }
-  .hero h1 { font-size:2rem; letter-spacing:.12em; margin:.5rem 0 .25rem; text-transform:uppercase; }
-  .hero p  { color:#c9c9c9; margin:0; font-size:.9rem; }
+  /* Hero (Opción 4 · Minimalista Moderno) */
+  .hero-v4 {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 4px 20px;
+    border-bottom: 1px solid #1f1f1f;
+    margin-bottom: 1.25rem;
+  }
+  .hero-logo {
+    width: 72px; height: 72px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    filter: drop-shadow(0 4px 12px rgba(245,197,24,0.28));
+  }
+  .hero-logo img { width: 100%; height: 100%; object-fit: contain; }
+  .hero-accent {
+    width: 3px; align-self: stretch; min-height: 58px;
+    background: linear-gradient(to bottom, #f5c518 0%, #e63946 100%);
+    border-radius: 2px;
+    box-shadow: 0 0 8px rgba(245,197,24,0.3);
+  }
+  .hero-text { flex: 1; min-width: 0; }
+  .hero-title {
+    font-size: 1.55rem; font-weight: 900;
+    color: #ffffff; letter-spacing: -0.015em; line-height: 1;
+    margin: 0;
+  }
+  .hero-title .accent-word { color: #f5c518; }
+  .hero-subtitle {
+    color: #888; font-size: .78rem; font-weight: 500;
+    margin-top: 6px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .live-dot {
+    width: 7px; height: 7px; background: #4ade80;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #4ade80;
+    animation: live-pulse 2s infinite;
+  }
+  @keyframes live-pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 6px #4ade80; }
+    50%      { opacity: .65; box-shadow: 0 0 12px #4ade80; }
+  }
 
   /* Tabs */
   .stTabs [data-baseweb="tab-list"] { gap:4px; background:var(--grey); padding:4px; border-radius:10px; border:1px solid #333; }
@@ -587,16 +634,27 @@ def render_category(df: pd.DataFrame, name: str):
 
 
 def main():
-    col_logo, col_text = st.columns([1, 3], vertical_alignment="center")
-    with col_logo:
-        if LOGO_PATH.exists():
-            st.image(str(LOGO_PATH), width=110)
-    with col_text:
-        st.markdown(
-            '<div class="hero"><h1>Spartan FC</h1>'
-            '<p>Estadísticas oficiales · Temporada 2026</p></div>',
-            unsafe_allow_html=True,
-        )
+    logo_b64 = _logo_b64(str(LOGO_PATH))
+    logo_html = (
+        f'<img src="data:image/png;base64,{logo_b64}" alt="Spartan FC">'
+        if logo_b64 else "⚔️"
+    )
+    st.markdown(
+        f'''
+        <div class="hero-v4">
+          <div class="hero-logo">{logo_html}</div>
+          <div class="hero-accent"></div>
+          <div class="hero-text">
+            <div class="hero-title">SPARTAN <span class="accent-word">FC</span></div>
+            <div class="hero-subtitle">
+              <span class="live-dot"></span>
+              Temporada 2026
+            </div>
+          </div>
+        </div>
+        ''',
+        unsafe_allow_html=True,
+    )
 
     if not EXCEL_PATH.exists():
         st.error(f"No se encontró el Excel en: {EXCEL_PATH}")
@@ -615,8 +673,9 @@ def main():
 
     st.markdown(
         '<div style="text-align:center;margin-top:2rem;padding-top:1rem;'
-        'border-top:1px solid #2a2a2a;color:#555;font-size:.78rem;">'
-        'Spartan FC App · Es un producto desarrollado por Boris Bugueño B.'
+        'border-top:1px solid #2a2a2a;color:#555;font-size:.78rem;line-height:1.5;">'
+        '<b style="color:#f5c518;">Spartan FC App</b><br>'
+        'Es un producto desarrollado por Boris Bugueño B.'
         '</div>',
         unsafe_allow_html=True,
     )
