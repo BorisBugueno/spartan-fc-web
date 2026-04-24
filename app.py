@@ -1,14 +1,13 @@
 """
-Spartan FC - Plataforma de Estadísticas v2
+Spartan FC - Plataforma de Estadísticas v4
 ==========================================
-Funcionalidades:
- - Tabla de posiciones con Spartan destacado en dorado
- - Fixture por fecha con tarjetas
- - Goleadores y asistencias ordenados de mayor a menor
- - Próximos partidos de Spartan
- - Evolución de puntos por fecha (gráfico interactivo)
- - Racha actual de resultados (últimos 5)
- - Banner especial si Spartan es líder
+Funcionalidades completas:
+ - Header moderno con logo 90px
+ - Tabla de posiciones con Spartan destacado
+ - Goleadores y asistencias ordenados
+ - Próximos partidos, evolución, racha
+ - Banner líder
+ - Footer con redes sociales y auspiciadores
 """
 
 from __future__ import annotations
@@ -28,12 +27,26 @@ ROOT = Path(__file__).parent
 EXCEL_PATH = ROOT / "data" / "Resultados.xlsx"
 LOGO_PATH  = ROOT / "assets" / "Logo_Spartan.png"
 LOGO_FALLBACK = ROOT / "assets" / "Logo_Oficial.jpeg"
+SPONSOR_MP = ROOT / "assets" / "sponsor_mprental.png"
+SPONSOR_INK = ROOT / "assets" / "sponsor_inkubiertos.png"
 SPARTAN_NAME = "Spartan F.C."
+
+# URLs
+INSTAGRAM_URL = "https://www.instagram.com/fc__spartan?igsh=MWtoOTRyaGo2Yjl6aQ=="
+MPRENTAL_URL = "https://mprental.cl/"
+INKUBIERTOS_URL = "https://www.instagram.com/inkubiertos?igsh=MWFjdmR0dTM4MzA2cQ=="
+
+st.set_page_config(
+    page_title="Spartan FC · Estadísticas",
+    page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else "⚽",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
 
 
 @st.cache_data(show_spinner=False)
 def _logo_b64(path_str: str) -> str:
-    """Embebe el logo como base64 para poder estilarlo dentro del HTML del header."""
+    """Embebe imagen como data URI para HTML."""
     import base64
     p = Path(path_str)
     if not p.exists():
@@ -42,12 +55,6 @@ def _logo_b64(path_str: str) -> str:
     data = base64.b64encode(p.read_bytes()).decode()
     return f"data:{media};base64,{data}"
 
-st.set_page_config(
-    page_title="Spartan FC · Estadísticas",
-    page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else "⚽",
-    layout="centered",
-    initial_sidebar_state="collapsed",
-)
 
 # --------------------------------------------------------------------------- #
 # CSS
@@ -70,46 +77,43 @@ CUSTOM_CSS = """
 
   h1,h2,h3,h4 { color: var(--gold) !important; font-weight: 800; }
 
-  /* Hero (Opción 4 · Minimalista Moderno) */
+  /* Hero v4 - logo 90px */
   .hero-v4 {
-    display: flex; align-items: center; gap: 16px;
-    padding: 12px 4px 20px;
-    border-bottom: 1px solid #1f1f1f;
-    margin-bottom: 1.25rem;
+    display:flex; align-items:center; gap:16px;
+    padding:12px 4px 20px;
+    border-bottom:1px solid #1f1f1f;
+    margin-bottom:1.25rem;
   }
   .hero-logo {
-    width: 72px; height: 72px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    filter: drop-shadow(0 4px 12px rgba(245,197,24,0.28));
+    width:90px; height:90px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    filter: drop-shadow(0 4px 14px rgba(245,197,24,0.32));
   }
-  .hero-logo img { width: 100%; height: 100%; object-fit: contain; }
+  .hero-logo img { width:100%; height:100%; object-fit:contain; }
   .hero-accent {
-    width: 3px; align-self: stretch; min-height: 58px;
+    width:3px; align-self:stretch; min-height:72px;
     background: linear-gradient(to bottom, #f5c518 0%, #e63946 100%);
-    border-radius: 2px;
+    border-radius:2px;
     box-shadow: 0 0 8px rgba(245,197,24,0.3);
   }
-  .hero-text { flex: 1; min-width: 0; }
+  .hero-text { flex:1; min-width:0; }
   .hero-title {
-    font-size: 1.55rem; font-weight: 900;
-    color: #ffffff; letter-spacing: -0.015em; line-height: 1;
-    margin: 0;
+    font-size:1.65rem; font-weight:900; color:#fff;
+    letter-spacing:-.015em; line-height:1;
   }
-  .hero-title .accent-word { color: #f5c518; }
+  .hero-title .accent-word { color:var(--gold); }
   .hero-subtitle {
-    color: #888; font-size: .78rem; font-weight: 500;
-    margin-top: 6px;
-    display: flex; align-items: center; gap: 6px;
+    color:#888; font-size:.8rem; font-weight:500;
+    margin-top:6px; display:flex; align-items:center; gap:6px;
   }
   .live-dot {
-    width: 7px; height: 7px; background: #4ade80;
-    border-radius: 50%;
-    box-shadow: 0 0 8px #4ade80;
+    width:7px; height:7px; background:#4ade80;
+    border-radius:50%; box-shadow:0 0 8px #4ade80;
     animation: live-pulse 2s infinite;
   }
   @keyframes live-pulse {
-    0%,100% { opacity: 1; box-shadow: 0 0 6px #4ade80; }
-    50%      { opacity: .65; box-shadow: 0 0 12px #4ade80; }
+    0%,100% { opacity:1; box-shadow:0 0 6px #4ade80; }
+    50%      { opacity:.65; box-shadow:0 0 12px #4ade80; }
   }
 
   /* Tabs */
@@ -117,7 +121,7 @@ CUSTOM_CSS = """
   .stTabs [data-baseweb="tab"]      { color:#c9c9c9; background:transparent; border-radius:8px; padding:8px 14px; font-weight:600; }
   .stTabs [aria-selected="true"]    { background:var(--gold) !important; color:var(--black) !important; }
 
-  /* Banner lider */
+  /* Banner líder */
   .leader-banner {
     background: linear-gradient(135deg, #1a1000 0%, #2e1f00 100%);
     border: 2px solid var(--gold);
@@ -149,17 +153,12 @@ CUSTOM_CSS = """
 
   /* Tabla posiciones */
   .standings-table { width:100%; border-collapse:collapse; font-size:.88rem; border-radius:10px; overflow:hidden; }
-  .standings-table th {
-    background:#2a2a2a; color:var(--gold); padding:8px 6px; text-align:center;
-    font-size:.75rem; letter-spacing:.08em; text-transform:uppercase;
-  }
+  .standings-table th { background:#2a2a2a; color:var(--gold); padding:8px 6px; text-align:center; font-size:.75rem; letter-spacing:.08em; text-transform:uppercase; }
   .standings-table th:nth-child(2) { text-align:left; }
   .standings-table td { padding:7px 6px; text-align:center; border-bottom:1px solid #222; }
   .standings-table td:nth-child(2) { text-align:left; font-weight:600; }
   .standings-table tr:last-child td { border-bottom:none; }
   .standings-table tr:hover td { background:#1a1a1a; }
-
-  /* Fila Spartan destacada */
   .row-spartan td {
     background: linear-gradient(90deg, #1a0e00 0%, #110900 100%) !important;
     color: var(--gold) !important;
@@ -169,19 +168,12 @@ CUSTOM_CSS = """
   }
 
   /* Tarjetas partido */
-  .match-card {
-    background:var(--grey); border:1px solid #2a2a2a; border-left:4px solid var(--gold);
-    border-radius:10px; padding:10px 14px; margin-bottom:8px;
-    display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:center; font-size:.95rem;
-  }
+  .match-card { background:var(--grey); border:1px solid #2a2a2a; border-left:4px solid var(--gold); border-radius:10px; padding:10px 14px; margin-bottom:8px; display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:center; font-size:.95rem; }
   .match-card.spartan { border-left-color:var(--red); }
   .match-card.proximo { border-left-color:#5566ff; }
   .team-local  { text-align:right; }
   .team-visita { text-align:left; }
-  .score {
-    background:var(--black); color:var(--gold); border:1px solid var(--gold);
-    border-radius:6px; padding:2px 10px; font-weight:800; min-width:60px; text-align:center;
-  }
+  .score { background:var(--black); color:var(--gold); border:1px solid var(--gold); border-radius:6px; padding:2px 10px; font-weight:800; min-width:60px; text-align:center; }
   .score.pending { color:#555; border-color:#333; }
   .spartan-name  { color:var(--red); font-weight:700; }
 
@@ -195,13 +187,91 @@ CUSTOM_CSS = """
   .scorer-table td { padding:7px 8px; border-bottom:1px solid #222; }
   .scorer-table tr:last-child td { border-bottom:none; }
 
-  /* Proximos */
+  /* Próximos */
   .proximos-header { color:#8888ff; font-weight:700; font-size:.85rem; margin-bottom:6px; text-transform:uppercase; letter-spacing:.1em; }
+
+  /* FOOTER COMPACTO CON SPONSORS */
+  .compact-footer {
+    margin-top:2rem;
+    padding-top:16px;
+    border-top:1px solid #1a1a1a;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .social-section, .sponsors-section {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+  }
+  .social-label, .sponsors-label {
+    color:#666;
+    font-size:.68rem;
+    letter-spacing:.08em;
+    font-weight:500;
+  }
+  .social-icons {
+    display:flex;
+    gap:10px;
+  }
+  .social-icon {
+    width:32px; height:32px;
+    display:flex; align-items:center; justify-content:center;
+    background:transparent;
+    border:1px solid #333;
+    border-radius:50%;
+    color:#666;
+    font-size:1rem;
+    transition:all .2s;
+    text-decoration:none;
+  }
+  .social-icon:hover {
+    color:var(--gold);
+    border-color:var(--gold);
+    transform:translateY(-2px);
+  }
+  .sponsors-row {
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:24px;
+  }
+  .sponsor-link {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:40px;
+    padding:0 8px;
+    transition:all .25s;
+    text-decoration:none;
+  }
+  .sponsor-link:hover {
+    transform:scale(1.08);
+  }
+  .sponsor-logo {
+    max-height:40px;
+    max-width:100px;
+    object-fit:contain;
+    opacity:0.5;
+    transition:opacity .25s;
+  }
+  .sponsor-link:hover .sponsor-logo {
+    opacity:0.85;
+  }
+  .footer-credit {
+    text-align:center;
+    color:#444;
+    font-size:.68rem;
+    line-height:1.4;
+    margin-top:4px;
+  }
+  .footer-credit b { color:#666; font-weight:600; }
 
   footer, #MainMenu { visibility:hidden; }
 
   @media (max-width:480px) {
-    .hero h1    { font-size:1.4rem; }
+    .hero-title  { font-size:1.4rem; }
     .match-card { font-size:.82rem; padding:8px 10px; }
     .kpi .value { font-size:1.2rem; }
   }
@@ -390,7 +460,6 @@ def render_kpis(tabla: pd.DataFrame, played: list[dict]):
         return
     s = row.iloc[0]
 
-    # Racha últimos 5 partidos
     racha = played[-5:]
     racha_html = '<div class="racha">'
     for m in racha:
@@ -438,7 +507,6 @@ def render_standings(tabla: pd.DataFrame):
         dif_str = f"+{dif_val}" if dif_val > 0 else str(dif_val)
         html += f'<tr class="{tr_class}">'
         html += f"<td>{pos_str}</td>"
-        # Agregar ícono de espada a Spartan
         equipo_str = f"⚔️ {row['Equipo']}" if is_spartan else row["Equipo"]
         html += f"<td>{equipo_str}</td>"
         for col in ["PJ", "PG", "PE", "PP", "GF", "GC"]:
@@ -543,15 +611,11 @@ def render_evolution(played: list[dict], categoria: str):
     ]
 
     fig = go.Figure()
-
-    # Área bajo la curva
     fig.add_trace(go.Scatter(
         x=f_plot, y=p_plot,
         fill="tozeroy", fillcolor="rgba(245,197,24,0.07)",
         line=dict(width=0), showlegend=False, hoverinfo="skip",
     ))
-
-    # Línea principal
     fig.add_trace(go.Scatter(
         x=f_plot, y=p_plot,
         mode="lines+markers+text",
@@ -579,7 +643,6 @@ def render_evolution(played: list[dict], categoria: str):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Leyenda de colores
     st.markdown(
         '<div style="display:flex;gap:16px;justify-content:center;margin-bottom:12px;font-size:.78rem;">'
         '<span>🟢 Victoria</span><span>🟡 Empate</span><span>🔴 Derrota</span>'
@@ -587,7 +650,6 @@ def render_evolution(played: list[dict], categoria: str):
         unsafe_allow_html=True,
     )
 
-    # Detalle de cada partido
     st.markdown('<div class="section-title">Detalle de partidos jugados</div>', unsafe_allow_html=True)
     for m in played:
         color = "#4ade80" if m["Res"] == "G" else ("#f5c518" if m["Res"] == "E" else "#f87171")
@@ -614,7 +676,6 @@ def render_category(df: pd.DataFrame, name: str):
     gol, asist = compute_individual_stats(df)
     played, upcoming = get_spartan_matches(df)
 
-    # Banner si Spartan es líder
     spartan_row = tabla[tabla["Equipo"].str.contains(SPARTAN_NAME, na=False)]
     if not spartan_row.empty and int(spartan_row.iloc[0]["Pos"]) == 1:
         render_leader_banner()
@@ -636,8 +697,50 @@ def render_category(df: pd.DataFrame, name: str):
         render_upcoming(upcoming)
 
 
+def render_footer():
+    """Footer con redes sociales y auspiciadores."""
+    mp_data = _logo_b64(str(SPONSOR_MP))
+    ink_data = _logo_b64(str(SPONSOR_INK))
+    
+    st.markdown(
+        f'''
+        <div class="compact-footer">
+          <div class="social-section">
+            <div class="social-label">Síguenos en nuestras redes sociales</div>
+            <div class="social-icons">
+              <a href="{INSTAGRAM_URL}" class="social-icon" target="_blank" title="Instagram">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          <div class="sponsors-section">
+            <div class="sponsors-label">Con el auspicio de:</div>
+            <div class="sponsors-row">
+              <a href="{MPRENTAL_URL}" class="sponsor-link" target="_blank" title="MP Rental">
+                <img src="{mp_data}" alt="MP Rental" class="sponsor-logo">
+              </a>
+              <a href="{INKUBIERTOS_URL}" class="sponsor-link" target="_blank" title="Inkubiertos">
+                <img src="{ink_data}" alt="Inkubiertos" class="sponsor-logo">
+              </a>
+            </div>
+          </div>
+
+          <div class="footer-credit">
+            <b>Spartan FC App</b><br>
+            Desarrollado por Boris Bugueño B.
+          </div>
+        </div>
+        ''',
+        unsafe_allow_html=True,
+    )
+
+
 def main():
-    # Intenta logo transparente, si no existe usa el original
     logo_data = _logo_b64(str(LOGO_PATH))
     if not logo_data:
         logo_data = _logo_b64(str(LOGO_FALLBACK))
@@ -677,14 +780,7 @@ def main():
         with tab:
             render_category(data[name], name)
 
-    st.markdown(
-        '<div style="text-align:center;margin-top:2rem;padding-top:1rem;'
-        'border-top:1px solid #2a2a2a;color:#555;font-size:.78rem;line-height:1.5;">'
-        '<b style="color:#f5c518;">Spartan FC App</b><br>'
-        'Es un producto desarrollado por Boris Bugueño B.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    render_footer()
 
 
 if __name__ == "__main__":
