@@ -1,10 +1,7 @@
 """
-Spartan FC - Plataforma de Estadísticas v6
+Spartan FC - Plataforma de Estadísticas v5
 ==========================================
-REDISEÑO COMPLETO:
-- Selector de serie tipo dropdown
-- 4 tabs principales: Estadísticas, Plantel, Cumpleaños, Tarjetas
-- Estructura limpia y escalable
+NUEVO: Plantel completo + Cumpleaños del mes
 """
 
 from __future__ import annotations
@@ -76,12 +73,13 @@ CUSTOM_CSS = """
 
   h1,h2,h3,h4 { color: var(--gold) !important; font-weight: 800; }
 
-  /* Hero v6 - limpio sin icono */
-  .hero-v6 {
+  /* Hero v5 - con icono cumpleaños */
+  .hero-v5 {
     display:flex; align-items:center; gap:16px;
-    padding:12px 4px 16px;
+    padding:12px 4px 20px;
     border-bottom:1px solid #1f1f1f;
-    margin-bottom:16px;
+    margin-bottom:1.25rem;
+    position:relative;
   }
   .hero-logo {
     width:90px; height:90px; flex-shrink:0;
@@ -115,20 +113,68 @@ CUSTOM_CSS = """
     50%      { opacity:.65; box-shadow:0 0 12px #4ade80; }
   }
 
-  /* Selector de serie */
-  .selector-container {
-    padding:0 4px 14px;
-    border-bottom:1px solid #1f1f1f;
-    margin-bottom:14px;
+  /* Botón cumpleaños */
+  .birthday-btn {
+    position:absolute;
+    top:12px; right:4px;
+    width:36px; height:36px;
+    background:#1e1e1e;
+    border:1px solid #333;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:1.2rem;
+    cursor:default;
+    transition:all .2s;
   }
-  .selector-label {
-    color:#888;
-    font-size:.75rem;
-    font-weight:600;
-    text-transform:uppercase;
-    letter-spacing:.1em;
-    margin-bottom:8px;
+  .birthday-btn:hover {
+    background:#f5c518;
+    border-color:#f5c518;
+    transform:scale(1.05);
   }
+  .birthday-badge {
+    position:absolute;
+    top:-4px; right:-4px;
+    min-width:18px; height:18px;
+    background:#e63946;
+    border-radius:50%;
+    font-size:.68rem;
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    padding:0 4px;
+  }
+
+  /* Modal cumpleaños */
+  .birthday-modal {
+    background:#1a1a1a;
+    border:2px solid #f5c518;
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:1rem;
+  }
+  .birthday-modal-title {
+    color:#f5c518;
+    font-weight:800;
+    font-size:1.1rem;
+    margin-bottom:12px;
+    text-align:center;
+  }
+  .birthday-item {
+    padding:8px 12px;
+    background:#161616;
+    border-radius:8px;
+    margin-bottom:6px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .birthday-item:last-child { margin-bottom:0; }
+  .birthday-name { font-weight:600; color:#fff; font-size:.88rem; }
+  .birthday-date { color:#f5c518; font-size:.82rem; font-weight:700; }
 
   /* Tabs */
   .stTabs [data-baseweb="tab-list"] { gap:4px; background:var(--grey); padding:4px; border-radius:10px; border:1px solid #333; }
@@ -252,53 +298,6 @@ CUSTOM_CSS = """
   .role-tag.dt { background:var(--gold); color:var(--black); }
   .role-tag.cap { background:var(--red); color:#fff; }
   .role-tag.ayu { background:#5566ff; color:#fff; }
-
-  /* Cumpleaños */
-  .birthday-item {
-    padding:10px 14px;
-    background:#161616;
-    border-radius:8px;
-    margin-bottom:8px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    border-left:3px solid #f5c518;
-  }
-  .birthday-item:last-child { margin-bottom:0; }
-  .birthday-name { font-weight:700; color:#fff; font-size:.9rem; }
-  .birthday-date { color:#f5c518; font-size:.85rem; font-weight:700; }
-
-  /* Tabla tarjetas rojas */
-  .cards-table {
-    width:100%;
-    border-collapse:collapse;
-    font-size:.88rem;
-  }
-  .cards-table thead {
-    background:#2a2a2a;
-    border-bottom:2px solid #e63946;
-  }
-  .cards-table th {
-    padding:8px 10px;
-    text-align:left;
-    color:#e63946;
-    font-size:.75rem;
-    font-weight:700;
-    text-transform:uppercase;
-  }
-  .cards-table th:last-child { width:80px; text-align:center; }
-  .cards-table td {
-    padding:8px 10px;
-    border-bottom:1px solid #1a1a1a;
-  }
-  .cards-table tr:last-child td { border-bottom:none; }
-  .cards-table tr:hover { background:#161616; }
-  .cards-count {
-    text-align:center;
-    font-weight:800;
-    color:#e63946;
-    font-size:1.1rem;
-  }
 
   /* Tarjetas partido */
   .match-card { background:var(--grey); border:1px solid #2a2a2a; border-left:4px solid var(--gold); border-radius:10px; padding:10px 14px; margin-bottom:8px; display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:center; font-size:.95rem; }
@@ -504,9 +503,6 @@ def load_players(path: Path) -> dict[str, pd.DataFrame]:
         # Fecha de nacimiento
         df["FechaNac"] = pd.to_datetime(df["FECHA DE NACIMIENTO"], errors="coerce")
         
-        # Tarjetas rojas
-        df["TarjetasRojas"] = df["TARJETAS ROJAS"].fillna(0).astype(int)
-        
         # Ordenar por posición y número
         pos_order = {"POR": 1, "DEF": 2, "MED": 3, "DEL": 4, "DT": 5, "Ayudante": 6}
         df["PosOrden"] = df["Posicion"].map(lambda x: pos_order.get(x, 99))
@@ -517,26 +513,24 @@ def load_players(path: Path) -> dict[str, pd.DataFrame]:
     return out
 
 
-def get_birthdays_this_month(players_dict: dict[str, pd.DataFrame], serie_key: str) -> list[dict]:
-    """Obtiene cumpleaños del mes actual para una serie específica."""
-    if serie_key not in players_dict:
-        return []
-    
+def get_birthdays_this_month(players_dict: dict[str, pd.DataFrame]) -> list[dict]:
+    """Obtiene cumpleaños del mes actual."""
     mes_actual = datetime.now().month
-    df = players_dict[serie_key]
-    df_mes = df[df["FechaNac"].dt.month == mes_actual].copy()
-    
     cumples = []
-    for _, row in df_mes.iterrows():
-        cumples.append({
-            "Nombre": row["NombreCompleto"],
-            "Dia": row["FechaNac"].day,
-            "Mes": row["FechaNac"].month,
-            "Edad": datetime.now().year - row["FechaNac"].year,
-        })
     
-    # Ordenar por día
-    cumples.sort(key=lambda x: x["Dia"])
+    for serie, df in players_dict.items():
+        df_mes = df[df["FechaNac"].dt.month == mes_actual].copy()
+        df_mes = df_mes.sort_values("FechaNac")
+        
+        for _, row in df_mes.iterrows():
+            cumples.append({
+                "Serie": serie,
+                "Nombre": row["NombreCompleto"],
+                "Dia": row["FechaNac"].day,
+                "Mes": row["FechaNac"].month,
+                "Edad": datetime.now().year - row["FechaNac"].year,
+            })
+    
     return cumples
 
 
@@ -672,10 +666,9 @@ def _hl(name: str) -> str:
     return f'<span class="spartan-name">{name}</span>' if SPARTAN_NAME in name else name
 
 
-def render_birthdays(cumples: list[dict]):
-    """Renderiza lista de cumpleaños ordenada por día."""
+def render_birthday_modal(cumples: list[dict]):
+    """Muestra modal con cumpleaños del mes."""
     if not cumples:
-        st.info("No hay cumpleaños este mes.")
         return
     
     meses = {
@@ -684,58 +677,26 @@ def render_birthdays(cumples: list[dict]):
     }
     mes_nombre = meses[cumples[0]["Mes"]]
     
-    st.markdown(f"### 🎂 Cumpleaños de {mes_nombre.capitalize()}")
-    st.caption(f"Total: {len(cumples)} cumpleaños este mes")
-    st.markdown("")
+    html_parts = [f'<div class="birthday-modal">']
+    html_parts.append(f'<div class="birthday-modal-title">🎂 Cumpleaños de {mes_nombre.capitalize()}</div>')
     
-    html_parts = []
     for c in cumples:
         html_parts.append(
             f'<div class="birthday-item">'
-            f'<div class="birthday-name">{c["Nombre"]}</div>'
+            f'<div class="birthday-name">{c["Nombre"]} (Serie {c["Serie"]})</div>'
             f'<div class="birthday-date">{c["Dia"]} de {mes_nombre} · {c["Edad"]} años</div>'
             f'</div>'
         )
     
-    st.markdown(''.join(html_parts), unsafe_allow_html=True)
-
-
-def render_red_cards(df: pd.DataFrame):
-    """Renderiza tabla de tarjetas rojas (solo jugadores con al menos 1)."""
-    df_rojas = df[df["TarjetasRojas"] > 0].copy()
-    df_rojas = df_rojas.sort_values("TarjetasRojas", ascending=False)
-    
-    if df_rojas.empty:
-        st.info("No hay tarjetas rojas registradas.")
-        return
-    
-    st.markdown("### 🟥 Tabla Disciplinaria")
-    st.caption(f"Jugadores con tarjetas rojas: {len(df_rojas)}")
-    st.markdown("")
-    
-    html_parts = ['<table class="cards-table"><thead><tr>']
-    html_parts.append('<th>Jugador</th><th>Rojas</th>')
-    html_parts.append('</tr></thead><tbody>')
-    
-    for _, row in df_rojas.iterrows():
-        html_parts.append('<tr>')
-        html_parts.append(f'<td>{row["NombreCompleto"]}</td>')
-        html_parts.append(f'<td class="cards-count">{int(row["TarjetasRojas"])}</td>')
-        html_parts.append('</tr>')
-    
-    html_parts.append('</tbody></table>')
+    html_parts.append('</div>')
     st.markdown(''.join(html_parts), unsafe_allow_html=True)
 
 
 def render_roster_table(df: pd.DataFrame):
-    """Renderiza tabla de plantel (3 columnas: # | Jugador | Pos)."""
+    """Renderiza tabla de plantel completa (Opción A)."""
     if df.empty:
         st.info("Sin jugadores registrados.")
         return
-    
-    st.markdown(f"### 👥 Plantel Completo")
-    st.caption(f"Total: {len(df)} jugadores registrados")
-    st.markdown("")
     
     html_parts = ['<table class="roster-table"><thead><tr>']
     html_parts.append('<th>#</th><th>Jugador</th><th>Pos</th>')
@@ -769,11 +730,11 @@ def render_roster_table(df: pd.DataFrame):
         }.get(pos, pos)
         pos_html = f'<span class="pos-badge">{pos_display}</span>'
         
-        html_parts.append('<tr>')
+        html_parts.append(f'<tr>')
         html_parts.append(f'<td style="text-align:center;">{num_html}</td>')
         html_parts.append(f'<td>{nombre_html}</td>')
         html_parts.append(f'<td style="text-align:center;">{pos_html}</td>')
-        html_parts.append('</tr>')
+        html_parts.append(f'</tr>')
     
     html_parts.append('</tbody></table>')
     st.markdown(''.join(html_parts), unsafe_allow_html=True)
@@ -1036,11 +997,10 @@ def render_footer():
 
 
 # --------------------------------------------------------------------------- #
-# App principal con nueva estructura
+# App principal
 # --------------------------------------------------------------------------- #
 
-def render_estadisticas_tab(df: pd.DataFrame, name: str):
-    """Renderiza tab Estadísticas con sus sub-tabs."""
+def render_category(df: pd.DataFrame, name: str):
     tabla = compute_standings(df)
     gol, asist = compute_individual_stats(df)
     played, upcoming = get_spartan_matches(df)
@@ -1052,29 +1012,37 @@ def render_estadisticas_tab(df: pd.DataFrame, name: str):
     render_kpis(tabla, played)
     st.markdown("")
 
-    # Sub-tabs de estadísticas
-    sub_tabs = st.tabs(["📊 Posiciones", "📅 Fixture", "⭐ Individuales", "📈 Evolución", "🔜 Próximos"])
+    tabs = st.tabs(["📊 Posiciones", "📅 Fixture", "⭐ Individuales", "📈 Evolución", "🔜 Próximos"])
 
-    with sub_tabs[0]:
+    with tabs[0]:
         render_standings(tabla)
-    with sub_tabs[1]:
+    with tabs[1]:
         render_fixture(df)
-    with sub_tabs[2]:
+    with tabs[2]:
         render_individuals(gol, asist)
-    with sub_tabs[3]:
+    with tabs[3]:
         render_evolution(played, name)
-    with sub_tabs[4]:
+    with tabs[4]:
         render_upcoming(upcoming)
 
 
 def main():
-    # Header limpio
+    # Header con logo + icono cumpleaños
     logo_data = _logo_b64(str(LOGO_PATH))
     if not logo_data:
         logo_data = _logo_b64(str(LOGO_FALLBACK))
     logo_html = f'<img src="{logo_data}" alt="Spartan FC">' if logo_data else "⚔️"
     
-    hero_parts = ['<div class="hero-v6">']
+    # Cargar jugadores y obtener cumpleaños
+    players_data = load_players(PLAYERS_PATH)
+    cumples = get_birthdays_this_month(players_data)
+    
+    # Botón cumpleaños
+    birthday_btn = ""
+    if cumples:
+        birthday_btn = f'<div class="birthday-btn">🎂<div class="birthday-badge">{len(cumples)}</div></div>'
+    
+    hero_parts = ['<div class="hero-v5">']
     hero_parts.append(f'<div class="hero-logo">{logo_html}</div>')
     hero_parts.append('<div class="hero-accent"></div>')
     hero_parts.append('<div class="hero-text">')
@@ -1083,11 +1051,17 @@ def main():
     hero_parts.append('<span class="live-dot"></span>')
     hero_parts.append('Temporada 2026')
     hero_parts.append('</div></div>')
+    hero_parts.append(birthday_btn)
     hero_parts.append('</div>')
     
     st.markdown(''.join(hero_parts), unsafe_allow_html=True)
     
-    # Cargar datos
+    # Mostrar cumpleaños si existen (collapsible)
+    if cumples:
+        with st.expander(f"🎂 Cumpleaños de este mes ({len(cumples)})", expanded=False):
+            render_birthday_modal(cumples)
+    
+    # Cargar datos de partidos
     if not EXCEL_PATH.exists():
         st.error(f"No se encontró el Excel en: {EXCEL_PATH}")
         st.stop()
@@ -1097,55 +1071,42 @@ def main():
         st.error("El Excel no tiene hojas válidas.")
         st.stop()
 
-    players_data = load_players(PLAYERS_PATH)
+    # Tabs principales: Serie 35, Serie 45, Plantel
+    order = sorted([k for k in data.keys()], key=lambda n: (0 if "35" in n else 1 if "45" in n else 2, n))
     
-    # Determinar series disponibles
-    series_disponibles = sorted([k for k in data.keys()], key=lambda n: (0 if "35" in n else 1 if "45" in n else 2, n))
+    # Agregar tabs de plantel si hay datos
+    main_tabs = []
+    for name in order:
+        main_tabs.append(f"🏆 {name}")
     
-    # Selector de serie
-    st.markdown('<div class="selector-container">', unsafe_allow_html=True)
-    st.markdown('<div class="selector-label">Categoría</div>', unsafe_allow_html=True)
+    if players_data:
+        for name in order:
+            # Extraer número de serie para matchear con players_data
+            serie_num = "35" if "35" in name else ("45" if "45" in name else name)
+            if serie_num in players_data:
+                main_tabs.append(f"👥 Plantel {name}")
     
-    serie_seleccionada = st.selectbox(
-        "Categoría",
-        options=series_disponibles,
-        format_func=lambda x: f"Serie {x}",
-        label_visibility="collapsed",
-        key="serie_selector"
-    )
+    cat_tabs = st.tabs(main_tabs)
     
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Renderizar estadísticas
+    idx = 0
+    for name in order:
+        with cat_tabs[idx]:
+            render_category(data[name], name)
+        idx += 1
     
-    # Extraer número de serie para players_data
-    serie_num = "35" if "35" in serie_seleccionada else ("45" if "45" in serie_seleccionada else serie_seleccionada)
-    
-    # 4 Tabs principales
-    main_tabs = st.tabs(["📊 Estadísticas", "👥 Plantel", "🎂 Cumpleaños", "🟥 Tarjetas"])
-    
-    # Tab 1: Estadísticas
-    with main_tabs[0]:
-        render_estadisticas_tab(data[serie_seleccionada], serie_seleccionada)
-    
-    # Tab 2: Plantel
-    with main_tabs[1]:
-        if serie_num in players_data:
-            render_roster_table(players_data[serie_num])
-        else:
-            st.info("No hay datos de plantel para esta serie.")
-    
-    # Tab 3: Cumpleaños
-    with main_tabs[2]:
-        cumples = get_birthdays_this_month(players_data, serie_num)
-        render_birthdays(cumples)
-    
-    # Tab 4: Tarjetas Rojas
-    with main_tabs[3]:
-        if serie_num in players_data:
-            render_red_cards(players_data[serie_num])
-        else:
-            st.info("No hay datos de jugadores para esta serie.")
-    
-    # Footer
+    # Renderizar plantel
+    if players_data:
+        for name in order:
+            # Extraer número de serie para matchear con players_data
+            serie_num = "35" if "35" in name else ("45" if "45" in name else name)
+            if serie_num in players_data:
+                with cat_tabs[idx]:
+                    st.markdown(f"### 👥 Plantel Completo · {name}")
+                    st.caption(f"Total: {len(players_data[serie_num])} jugadores registrados")
+                    render_roster_table(players_data[serie_num])
+                idx += 1
+
     render_footer()
 
 
