@@ -1035,14 +1035,6 @@ def main():
     
     # Cargar jugadores y obtener cumpleaños
     players_data = load_players(PLAYERS_PATH)
-    
-    # DEBUG: Mostrar info de carga
-    if not PLAYERS_PATH.exists():
-        st.warning(f"⚠️ No se encontró el archivo de jugadores en: {PLAYERS_PATH}")
-        st.info("Sube 'Lista_Oficial_Jugadores_Apertura_2026.xlsx' a la carpeta data/")
-    elif players_data:
-        st.success(f"✅ Jugadores cargados: {', '.join([f'Serie {k} ({len(v)} jugadores)' for k, v in players_data.items()])}")
-    
     cumples = get_birthdays_this_month(players_data)
     
     # Botón cumpleaños
