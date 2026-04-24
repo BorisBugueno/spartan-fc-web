@@ -1035,6 +1035,14 @@ def main():
     
     # Cargar jugadores y obtener cumpleaños
     players_data = load_players(PLAYERS_PATH)
+    
+    # DEBUG: Mostrar info de carga
+    if not PLAYERS_PATH.exists():
+        st.warning(f"⚠️ No se encontró el archivo de jugadores en: {PLAYERS_PATH}")
+        st.info("Sube 'Lista_Oficial_Jugadores_Apertura_2026.xlsx' a la carpeta data/")
+    elif players_data:
+        st.success(f"✅ Jugadores cargados: {', '.join([f'Serie {k} ({len(v)} jugadores)' for k, v in players_data.items()])}")
+    
     cumples = get_birthdays_this_month(players_data)
     
     # Botón cumpleaños
@@ -1056,9 +1064,10 @@ def main():
     
     st.markdown(''.join(hero_parts), unsafe_allow_html=True)
     
-    # Mostrar cumpleaños si existen
+    # Mostrar cumpleaños si existen (collapsible)
     if cumples:
-        render_birthday_modal(cumples)
+        with st.expander(f"🎂 Cumpleaños de este mes ({len(cumples)})", expanded=False):
+            render_birthday_modal(cumples)
     
     # Cargar datos de partidos
     if not EXCEL_PATH.exists():
@@ -1079,8 +1088,11 @@ def main():
         main_tabs.append(f"🏆 {name}")
     
     if players_data:
-        for serie in order:
-            main_tabs.append(f"👥 Plantel {serie}")
+        for name in order:
+            # Extraer número de serie para matchear con players_data
+            serie_num = "35" if "35" in name else ("45" if "45" in name else name)
+            if serie_num in players_data:
+                main_tabs.append(f"👥 Plantel {name}")
     
     cat_tabs = st.tabs(main_tabs)
     
@@ -1093,15 +1105,15 @@ def main():
     
     # Renderizar plantel
     if players_data:
-        for serie in order:
-            with cat_tabs[idx]:
-                if serie in players_data:
-                    st.markdown(f"### 👥 Plantel Completo · Serie {serie}")
-                    st.caption(f"Total: {len(players_data[serie])} jugadores registrados")
-                    render_roster_table(players_data[serie])
-                else:
-                    st.info(f"No hay datos de plantel para Serie {serie}")
-            idx += 1
+        for name in order:
+            # Extraer número de serie para matchear con players_data
+            serie_num = "35" if "35" in name else ("45" if "45" in name else name)
+            if serie_num in players_data:
+                with cat_tabs[idx]:
+                    st.markdown(f"### 👥 Plantel Completo · {name}")
+                    st.caption(f"Total: {len(players_data[serie_num])} jugadores registrados")
+                    render_roster_table(players_data[serie_num])
+                idx += 1
 
     render_footer()
 
