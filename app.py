@@ -153,6 +153,12 @@ CUSTOM_CSS = """
   .leader-banner p { margin:.3rem 0 0; color:var(--gold); font-weight:700; font-size:1rem; }
 
   /* KPIs */
+  .kpis {
+    display:grid;
+    grid-template-columns:repeat(5, 1fr);
+    gap:6px;
+    margin-bottom:16px;
+  }
   .kpi { background:var(--grey); border:1px solid #2a2a2a; border-radius:10px; padding:12px; text-align:center; }
   .kpi .label { color:#aaa; font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; }
   .kpi .value { color:var(--gold); font-size:1.5rem; font-weight:800; }
@@ -406,6 +412,7 @@ CUSTOM_CSS = """
   @media (max-width:480px) {
     .hero-title  { font-size:1.4rem; }
     .match-card { font-size:.82rem; padding:8px 10px; }
+    .kpis { grid-template-columns:repeat(3, 1fr); }
     .kpi .value { font-size:1.2rem; }
   }
 </style>
@@ -438,7 +445,7 @@ def load_data(path: Path) -> dict[str, pd.DataFrame]:
     for name, df in sheets.items():
         df = df.copy()
         df = df[df["Local"].astype(str).str.strip() != "---"]
-        for col in ["Fecha", "Local", "Visita", "Goles Spartan", "Asistencia Spartan"]:
+        for col in ["Fecha", "Local", "Visita", "Goles Spartan", "Asistencia Spartan", "Hora"]:
             if col in df.columns:
                 df[col] = df[col].map(_clean)
         out[name] = df.reset_index(drop=True)
@@ -639,9 +646,22 @@ def get_spartan_matches(df: pd.DataFrame):
                 "Local": is_local, "GF": gf, "GC": gc, "Res": res,
             })
         else:
+            # Capturar Día y Hora si existen
+            dia = None
+            hora = None
+            
+            if "Día" in df.columns and pd.notna(row["Día"]):
+                dia = row["Día"]
+                
+            if "Hora" in df.columns and pd.notna(row["Hora"]):
+                hora = str(row["Hora"]).strip()
+            
             upcoming.append({
-                "Fecha": row["Fecha"].strip(), "Rival": rival.strip(),
-                "EsLocal": is_local,
+                "Fecha": row["Fecha"].strip(), 
+                "Rival": rival.strip(),
+                "EsLocal": is_local, 
+                "Dia": dia,
+                "Hora": hora,
             })
     return played, upcoming
 
@@ -733,7 +753,7 @@ def render_roster_table(df: pd.DataFrame):
         st.info("Sin jugadores registrados.")
         return
     
-    st.markdown(f"### 👥 Plantel Completo")
+    st.markdown(f"### 👥 Plantel")
     st.caption(f"Total: {len(df)} jugadores registrados")
     st.markdown("")
     
@@ -806,20 +826,21 @@ def render_kpis(tabla: pd.DataFrame, played: list[dict]):
     racha_html += "</div>"
     st.markdown(racha_html, unsafe_allow_html=True)
 
-    cols = st.columns(5)
-    kpis = [
+    # KPIs en HTML puro para mejor responsive
+    kpis_data = [
         ("Posición", f"{int(s['Pos'])}°"),
         ("Puntos", int(s["Pts"])),
         ("PJ", int(s["PJ"])),
         ("GF", int(s["GF"])),
         ("GC", int(s["GC"])),
     ]
-    for col, (label, value) in zip(cols, kpis):
-        col.markdown(
-            f'<div class="kpi"><div class="label">{label}</div>'
-            f'<div class="value">{value}</div></div>',
-            unsafe_allow_html=True,
-        )
+    
+    kpis_html = '<div class="kpis">'
+    for label, value in kpis_data:
+        kpis_html += f'<div class="kpi"><div class="label">{label}</div><div class="value">{value}</div></div>'
+    kpis_html += '</div>'
+    
+    st.markdown(kpis_html, unsafe_allow_html=True)
 
 
 def render_standings(tabla: pd.DataFrame):
@@ -882,10 +903,46 @@ def render_upcoming(upcoming: list[dict]):
         st.info("No hay próximos partidos registrados.")
         return
     st.markdown('<div class="proximos-header">🔜 Próximos compromisos de Spartan</div>', unsafe_allow_html=True)
+    
+    meses = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    
     for m in upcoming[:6]:
         local_name  = SPARTAN_NAME if m["EsLocal"] else m["Rival"]
         visita_name = m["Rival"] if m["EsLocal"] else SPARTAN_NAME
         condicion   = "🏠 Local" if m["EsLocal"] else "✈️ Visita"
+        
+        # Construir info adicional (fecha + día + hora + condición)
+        info_parts = [m["Fecha"]]
+        
+        # Formatear Día si existe
+        if m.get("Dia") and m["Dia"]:
+            try:
+                # Intentar parsear la fecha
+                if isinstance(m["Dia"], str):
+                    fecha_dt = pd.to_datetime(m["Dia"], errors="coerce")
+                else:
+                    fecha_dt = pd.to_datetime(m["Dia"])
+                
+                if pd.notna(fecha_dt):
+                    dia_semana = dias_semana[fecha_dt.weekday()]
+                    dia_num = fecha_dt.day
+                    mes_nombre = meses[fecha_dt.month]
+                    fecha_formateada = f"{dia_semana} {dia_num} {mes_nombre}"
+                    info_parts.append(fecha_formateada)
+            except:
+                pass  # Si hay error, no mostrar fecha
+        
+        # Agregar hora si existe
+        if m.get("Hora") and m["Hora"]:
+            info_parts.append(m["Hora"])
+        
+        info_parts.append(condicion)
+        info_str = " · ".join(info_parts)
+        
         st.markdown(
             f'<div class="match-card proximo">'
             f'<div class="team-local">{_hl(local_name)}</div>'
@@ -893,7 +950,7 @@ def render_upcoming(upcoming: list[dict]):
             f'<div class="team-visita">{_hl(visita_name)}</div>'
             f'</div>'
             f'<div style="text-align:center;margin:-4px 0 8px;font-size:.75rem;color:#666;">'
-            f'{m["Fecha"]} · {condicion}</div>',
+            f'{info_str}</div>',
             unsafe_allow_html=True,
         )
 
@@ -1109,7 +1166,7 @@ def main():
     serie_seleccionada = st.selectbox(
         "Categoría",
         options=series_disponibles,
-        format_func=lambda x: f"Serie {x}",
+        format_func=lambda x: x,  # Mostrar el valor tal cual (ya dice "Serie 35")
         label_visibility="collapsed",
         key="serie_selector"
     )
