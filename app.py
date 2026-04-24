@@ -444,7 +444,16 @@ def load_data(path: Path) -> dict[str, pd.DataFrame]:
     out = {}
     for name, df in sheets.items():
         df = df.copy()
+        
+        # Verificar que la hoja tenga las columnas necesarias
+        required_cols = ["Local", "Visita", "Fecha"]
+        if not all(col in df.columns for col in required_cols):
+            # Saltar hojas que no tienen estructura de resultados
+            continue
+        
+        # Limpiar filas separadoras
         df = df[df["Local"].astype(str).str.strip() != "---"]
+        
         for col in ["Fecha", "Local", "Visita", "Goles Spartan", "Asistencia Spartan", "Hora"]:
             if col in df.columns:
                 df[col] = df[col].map(_clean)
