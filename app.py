@@ -28,12 +28,14 @@ LOGO_PATH  = ROOT / "assets" / "Logo_Spartan.png"
 LOGO_FALLBACK = ROOT / "assets" / "Logo_Oficial.jpeg"
 SPONSOR_MP = ROOT / "assets" / "sponsor_mprental.png"
 SPONSOR_INK = ROOT / "assets" / "sponsor_inkubiertos.png"
+SPONSOR_BAL = ROOT / "assets" / "sponsor_baldomeros.png"
 SPARTAN_NAME = "Spartan F.C."
 
 # URLs
 INSTAGRAM_URL = "https://www.instagram.com/fc__spartan?igsh=MWtoOTRyaGo2Yjl6aQ=="
 MPRENTAL_URL = "https://mprental.cl/"
 INKUBIERTOS_URL = "https://www.instagram.com/inkubiertos?igsh=MWFjdmR0dTM4MzA2cQ=="
+BALDOMEROS_URL = "https://www.instagram.com/cerveceria_baldomeros?igsh=OHVtZ3cxbGdyYjRi"
 
 st.set_page_config(
     page_title="Spartan FC · Estadísticas",
@@ -374,29 +376,36 @@ CUSTOM_CSS = """
     display:flex;
     justify-content:center;
     align-items:center;
-    gap:24px;
+    gap:14px;
+    flex-wrap:wrap;
   }
   .sponsor-link {
     display:flex;
     align-items:center;
     justify-content:center;
-    height:40px;
-    padding:0 8px;
-    transition:all .25s;
+    height:55px;
+    padding:0 4px;
+    transition:transform .25s;
     text-decoration:none;
   }
   .sponsor-link:hover {
     transform:scale(1.08);
   }
   .sponsor-logo {
-    max-height:40px;
-    max-width:100px;
     object-fit:contain;
-    opacity:0.5;
-    transition:opacity .25s;
   }
-  .sponsor-link:hover .sponsor-logo {
-    opacity:0.85;
+  /* Tamaños individuales para que se vean similares visualmente */
+  .sponsor-logo.mp {
+    max-height:48px;
+    max-width:90px;
+  }
+  .sponsor-logo.ink {
+    max-height:55px;
+    max-width:100px;
+  }
+  .sponsor-logo.bal {
+    max-height:50px;
+    max-width:110px;
   }
   .footer-credit {
     text-align:center;
@@ -1072,6 +1081,7 @@ def render_footer():
     """Footer con redes sociales y auspiciadores."""
     mp_data = _logo_b64(str(SPONSOR_MP))
     ink_data = _logo_b64(str(SPONSOR_INK))
+    bal_data = _logo_b64(str(SPONSOR_BAL))
     
     footer_parts = ['<div class="compact-footer">']
     footer_parts.append('<div class="social-section">')
@@ -1088,9 +1098,11 @@ def render_footer():
     footer_parts.append('<div class="sponsors-label">Con el auspicio de:</div>')
     footer_parts.append('<div class="sponsors-row">')
     footer_parts.append(f'<a href="{MPRENTAL_URL}" class="sponsor-link" target="_blank" title="MP Rental">')
-    footer_parts.append(f'<img src="{mp_data}" alt="MP Rental" class="sponsor-logo"></a>')
+    footer_parts.append(f'<img src="{mp_data}" alt="MP Rental" class="sponsor-logo mp"></a>')
     footer_parts.append(f'<a href="{INKUBIERTOS_URL}" class="sponsor-link" target="_blank" title="Inkubiertos">')
-    footer_parts.append(f'<img src="{ink_data}" alt="Inkubiertos" class="sponsor-logo"></a>')
+    footer_parts.append(f'<img src="{ink_data}" alt="Inkubiertos" class="sponsor-logo ink"></a>')
+    footer_parts.append(f'<a href="{BALDOMEROS_URL}" class="sponsor-link" target="_blank" title="Baldomero\'s">')
+    footer_parts.append(f'<img src="{bal_data}" alt="Baldomero\'s" class="sponsor-logo bal"></a>')
     footer_parts.append('</div></div>')
     
     footer_parts.append('<div class="footer-credit">')
