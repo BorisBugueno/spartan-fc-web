@@ -189,6 +189,22 @@ CUSTOM_CSS = """
     border-bottom: 1px solid #3a2800 !important;
   }
 
+  /* Marca de penalización */
+  .penal-mark {
+    color: #e63946;
+    font-weight: 800;
+  }
+  .penal-note {
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: #1a0d0d;
+    border-left: 3px solid #e63946;
+    border-radius: 8px;
+    color: #d99;
+    font-size: .78rem;
+    line-height: 1.4;
+  }
+
   /* Tabla PLANTEL (roster) */
   .roster-table {
     width:100%;
@@ -471,6 +487,52 @@ def load_data(path: Path) -> dict[str, pd.DataFrame]:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
+def load_penalizations(path: Path) -> dict[str, dict[str, int]]:
+    """Carga penalizaciones por serie desde las hojas PenalizacionesS35 / PenalizacionesS45.
+
+    Devuelve un dict: {"35": {"Julieta": 7, ...}, "45": {...}}
+    Maneja hojas vacías o inexistentes sin fallar.
+    """
+    if not path.exists():
+        return {}
+
+    sheets = pd.read_excel(path, sheet_name=None)
+    out: dict[str, dict[str, int]] = {}
+
+    for name, df in sheets.items():
+        # Solo hojas cuyo nombre empieza con "Penalizacion"
+        if not name.lower().startswith("penalizacion"):
+            continue
+
+        # Extraer número de serie del nombre de la hoja (35 o 45)
+        serie_num = "35" if "35" in name else ("45" if "45" in name else None)
+        if serie_num is None:
+            continue
+
+        penal: dict[str, int] = {}
+
+        # Hoja vacía o sin las columnas esperadas -> sin penalizaciones
+        if df.empty or "Equipo" not in df.columns or "Penalización" not in df.columns:
+            out[serie_num] = penal
+            continue
+
+        for _, row in df.iterrows():
+            equipo = _clean(row["Equipo"])
+            if not equipo:
+                continue
+            try:
+                puntos = int(row["Penalización"])
+            except (ValueError, TypeError):
+                continue
+            if puntos != 0:
+                penal[equipo] = penal.get(equipo, 0) + puntos
+
+        out[serie_num] = penal
+
+    return out
+
+
+@st.cache_data(ttl=60, show_spinner=False)
 def load_players(path: Path) -> dict[str, pd.DataFrame]:
     """Carga lista de jugadores desde Excel."""
     if not path.exists():
@@ -569,7 +631,8 @@ def get_birthdays_this_month(players_dict: dict[str, pd.DataFrame], serie_key: s
 # Cálculos
 # --------------------------------------------------------------------------- #
 
-def compute_standings(df: pd.DataFrame) -> pd.DataFrame:
+def compute_standings(df: pd.DataFrame, penalizaciones: dict[str, int] | None = None) -> pd.DataFrame:
+    penalizaciones = penalizaciones or {}
     stats: dict[str, dict] = defaultdict(
         lambda: {"PJ": 0, "PG": 0, "PE": 0, "PP": 0, "GF": 0, "GC": 0}
     )
@@ -601,15 +664,24 @@ def compute_standings(df: pd.DataFrame) -> pd.DataFrame:
 
     rows = []
     for team, s in stats.items():
-        pts = s["PG"] * 3 + s["PE"]
+        pts_base = s["PG"] * 3 + s["PE"]
+        # Buscar penalización (comparación exacta o normalizada)
+        penal = penalizaciones.get(team, 0)
+        if not penal:
+            for eq_penal, pts_penal in penalizaciones.items():
+                if eq_penal.strip().lower() == team.strip().lower():
+                    penal = pts_penal
+                    break
+        pts_final = pts_base - penal
         rows.append({
             "Equipo": team, "PJ": s["PJ"], "PG": s["PG"], "PE": s["PE"],
             "PP": s["PP"], "GF": s["GF"], "GC": s["GC"],
-            "DIF": s["GF"] - s["GC"], "Pts": pts,
+            "DIF": s["GF"] - s["GC"], "Pts": pts_final,
+            "Penalizado": penal > 0,
         })
 
     if not rows:
-        return pd.DataFrame(columns=["Pos", "Equipo", "PJ", "PG", "PE", "PP", "GF", "GC", "DIF", "Pts"])
+        return pd.DataFrame(columns=["Pos", "Equipo", "PJ", "PG", "PE", "PP", "GF", "GC", "DIF", "Pts", "Penalizado"])
 
     tabla = (
         pd.DataFrame(rows)
@@ -872,6 +944,9 @@ def render_standings(tabla: pd.DataFrame):
         html += f"<th>{col}</th>"
     html += "</tr></thead><tbody>"
 
+    penalizados = []
+    tiene_penal_col = "Penalizado" in tabla.columns
+
     for _, row in tabla.iterrows():
         is_spartan = SPARTAN_NAME in row["Equipo"]
         tr_class = "row-spartan" if is_spartan else ""
@@ -879,9 +954,17 @@ def render_standings(tabla: pd.DataFrame):
         pos_str = medal.get(pos, str(pos))
         dif_val = int(row["DIF"])
         dif_str = f"+{dif_val}" if dif_val > 0 else str(dif_val)
+
+        es_penalizado = bool(row["Penalizado"]) if tiene_penal_col else False
+        if es_penalizado:
+            penalizados.append(row["Equipo"])
+
         html += f'<tr class="{tr_class}">'
         html += f"<td>{pos_str}</td>"
-        equipo_str = f"⚔️ {row['Equipo']}" if is_spartan else row["Equipo"]
+        nombre_eq = row["Equipo"]
+        if es_penalizado:
+            nombre_eq += ' <span class="penal-mark">*</span>'
+        equipo_str = f"⚔️ {nombre_eq}" if is_spartan else nombre_eq
         html += f"<td>{equipo_str}</td>"
         for col in ["PJ", "PG", "PE", "PP", "GF", "GC"]:
             html += f"<td>{int(row[col])}</td>"
@@ -891,6 +974,24 @@ def render_standings(tabla: pd.DataFrame):
 
     html += "</tbody></table>"
     st.markdown(html, unsafe_allow_html=True)
+
+    # Nota al pie si hay equipos penalizados
+    if penalizados:
+        if len(penalizados) == 1:
+            equipos_txt = penalizados[0]
+        elif len(penalizados) == 2:
+            equipos_txt = f"{penalizados[0]} y {penalizados[1]}"
+        else:
+            equipos_txt = ", ".join(penalizados[:-1]) + f" y {penalizados[-1]}"
+
+        verbo = "recibió" if len(penalizados) == 1 else "recibieron"
+        st.markdown(
+            f'<div class="penal-note">'
+            f'<span class="penal-mark">*</span> {equipos_txt} {verbo} '
+            f'descuento de puntos por temas administrativos.'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
 
 def render_fixture(df: pd.DataFrame):
@@ -1117,9 +1218,9 @@ def render_footer():
 # App principal con nueva estructura
 # --------------------------------------------------------------------------- #
 
-def render_estadisticas_tab(df: pd.DataFrame, name: str):
+def render_estadisticas_tab(df: pd.DataFrame, name: str, penalizaciones: dict[str, int] | None = None):
     """Renderiza tab Estadísticas con sus sub-tabs."""
-    tabla = compute_standings(df)
+    tabla = compute_standings(df, penalizaciones)
     gol, asist = compute_individual_stats(df)
     played, upcoming = get_spartan_matches(df)
 
@@ -1176,6 +1277,7 @@ def main():
         st.stop()
 
     players_data = load_players(PLAYERS_PATH)
+    penalizaciones_data = load_penalizations(EXCEL_PATH)
     
     # Determinar series disponibles
     series_disponibles = sorted([k for k in data.keys()], key=lambda n: (0 if "35" in n else 1 if "45" in n else 2, n))
@@ -1200,9 +1302,12 @@ def main():
     # 4 Tabs principales
     main_tabs = st.tabs(["📊 Estadísticas", "👥 Plantel", "🎂 Cumpleaños", "🟥 Tarjetas"])
     
+    # Penalizaciones de la serie seleccionada
+    penal_serie = penalizaciones_data.get(serie_num, {})
+    
     # Tab 1: Estadísticas
     with main_tabs[0]:
-        render_estadisticas_tab(data[serie_seleccionada], serie_seleccionada)
+        render_estadisticas_tab(data[serie_seleccionada], serie_seleccionada, penal_serie)
     
     # Tab 2: Plantel
     with main_tabs[1]:
