@@ -634,19 +634,15 @@ def query_supabase(table: str, params: str = "") -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def load_goleadores_historicos() -> pd.DataFrame:
-    """Carga ranking histórico de goleadores desde Supabase."""
-    df = query_supabase("v_goleadores_historicos")
-    if not df.empty:
-        df = df.sort_values("goles_totales", ascending=False).reset_index(drop=True)
+def load_goleadores_historicos(serie: str) -> pd.DataFrame:
+    """Carga ranking histórico de goleadores filtrado por serie."""
+    df = query_supabase("v_goleadores_historicos", f"serie=eq.{serie}&order=goles_totales.desc")
     return df
 
 
-def load_historial_rivales() -> pd.DataFrame:
-    """Carga historial de Spartan contra cada rival desde Supabase."""
-    df = query_supabase("v_historial_rivales")
-    if not df.empty:
-        df = df.sort_values("partidos", ascending=False).reset_index(drop=True)
+def load_historial_rivales(serie: str) -> pd.DataFrame:
+    """Carga historial de Spartan contra cada rival filtrado por serie."""
+    df = query_supabase("v_historial_rivales", f"serie=eq.{serie}&order=partidos.desc")
     return df
 
 
@@ -1270,11 +1266,11 @@ def render_footer():
 # Tab Histórico
 # --------------------------------------------------------------------------- #
 
-def render_goleadores_historicos():
+def render_goleadores_historicos(serie: str):
     """Renderiza ranking de goleadores históricos."""
-    df = load_goleadores_historicos()
+    df = load_goleadores_historicos(serie)
     if df.empty:
-        st.markdown('<div class="no-data-msg">No hay datos históricos disponibles aún.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="no-data-msg">No hay goles registrados en el histórico para esta serie.</div>', unsafe_allow_html=True)
         return
 
     st.markdown("### 🥅 Goleadores Históricos de Spartan")
@@ -1298,11 +1294,11 @@ def render_goleadores_historicos():
     st.markdown(''.join(html_parts), unsafe_allow_html=True)
 
 
-def render_historial_rivales():
+def render_historial_rivales(serie: str):
     """Renderiza historial de Spartan contra cada rival."""
-    df = load_historial_rivales()
+    df = load_historial_rivales(serie)
     if df.empty:
-        st.markdown('<div class="no-data-msg">No hay datos históricos disponibles aún.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="no-data-msg">No hay datos históricos disponibles para esta serie.</div>', unsafe_allow_html=True)
         return
 
     st.markdown("### ⚔️ Historial contra Rivales")
@@ -1391,9 +1387,9 @@ def render_historico_tab(serie: str):
     sub_tabs = st.tabs(["🥅 Goleadores", "⚔️ vs Rivales", "🏆 Torneos"])
 
     with sub_tabs[0]:
-        render_goleadores_historicos()
+        render_goleadores_historicos(serie)
     with sub_tabs[1]:
-        render_historial_rivales()
+        render_historial_rivales(serie)
     with sub_tabs[2]:
         render_torneos_anteriores(serie)
 
