@@ -389,7 +389,34 @@ def load_players(serie: str) -> pd.DataFrame:
     tab_name = TABS[serie]["plantel"]
     df = load_sheet_csv(tab_name)
 
-    if df.empty or "NOMBRES" not in df.columns:
+    if df.empty:
+        return pd.DataFrame()
+
+    # Normalizar nombres de columnas a MAYÚSCULAS para evitar problemas
+    col_map = {}
+    for col in df.columns:
+        col_upper = col.strip().upper()
+        # Mapear variantes comunes
+        if "POSICI" in col_upper:
+            col_map[col] = "POSICIÓN"
+        elif col_upper == "NOMBRES" or col_upper == "NOMBRE":
+            col_map[col] = "NOMBRES"
+        elif col_upper == "APELLIDOS" or col_upper == "APELLIDO":
+            col_map[col] = "APELLIDOS"
+        elif "CAMISETA" in col_upper or "NÚMERO" in col_upper and "CAMISETA" in col_upper:
+            col_map[col] = "NÚMERO DE CAMISETA"
+        elif col_upper == "RUT":
+            col_map[col] = "RUT"
+        elif "NACIMIENTO" in col_upper or "FECHA DE NACI" in col_upper:
+            col_map[col] = "FECHA DE NACIMIENTO"
+        elif "TARJETA" in col_upper and "ROJA" in col_upper:
+            col_map[col] = "TARJETAS ROJAS"
+        elif "NOMBRE COMPLETO" in col_upper:
+            col_map[col] = "NOMBRE COMPLETO"
+
+    df = df.rename(columns=col_map)
+
+    if "NOMBRES" not in df.columns:
         return pd.DataFrame()
 
     df = df[df["NOMBRES"].astype(str).str.strip() != ""].copy()
@@ -416,16 +443,22 @@ def load_players(serie: str) -> pd.DataFrame:
     df[["Posicion", "Rol"]] = df["POSICIÓN"].apply(
         lambda x: pd.Series(parse_position_role(x))
     )
-    df["NombreCompleto"] = (
-        df["NOMBRES"].fillna("").str.strip() + " " +
-        df["APELLIDOS"].fillna("").str.strip()
-    ).str.strip()
+
+    # Usar "NOMBRE COMPLETO" del Sheet si existe, sino construirlo
+    if "NOMBRE COMPLETO" in df.columns and df["NOMBRE COMPLETO"].notna().any():
+        df["NombreCompleto"] = df["NOMBRE COMPLETO"].fillna("").str.strip()
+    else:
+        df["NombreCompleto"] = (
+            df["NOMBRES"].fillna("").str.strip() + " " +
+            df["APELLIDOS"].fillna("").str.strip()
+        ).str.strip()
+
     df["Numero"] = pd.to_numeric(df["NÚMERO DE CAMISETA"], errors="coerce").fillna(0)
-    df["FechaNac"] = pd.to_datetime(df["FECHA DE NACIMIENTO"], errors="coerce")
+    df["FechaNac"] = pd.to_datetime(df["FECHA DE NACIMIENTO"], errors="coerce", dayfirst=True)
     df["TarjetasRojas"] = pd.to_numeric(df["TARJETAS ROJAS"], errors="coerce").fillna(0).astype(int)
 
     pos_order = {"POR": 1, "DEF": 2, "MED": 3, "DEL": 4, "DT": 5, "Ayudante": 6}
-    df["PosOrden"] = df["Posicion"].map(lambda x: pos_order.get(x, 99))
+    df["PosOrden"] = df["Posicion"].map(lambda x: pos_order.get(x.upper() if isinstance(x, str) else x, 99))
     df = df.sort_values(["PosOrden", "Numero"]).reset_index(drop=True)
 
     return df
