@@ -310,6 +310,63 @@ CUSTOM_CSS = """
 
   footer, #MainMenu { visibility:hidden; }
 
+  /* Histórico */
+  .hist-card {
+    background: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .hist-card h4 { margin-bottom: 8px; }
+  .hist-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #1e1e1e;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border-left: 3px solid #f5c518;
+  }
+  .hist-stat:last-child { margin-bottom: 0; }
+  .hist-stat .name { font-weight: 700; color: #fff; font-size: .9rem; }
+  .hist-stat .value { color: #f5c518; font-weight: 800; font-size: 1.1rem; }
+  .hist-stat .detail { color: #888; font-size: .75rem; }
+  .rival-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #1e1e1e;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    align-items: center;
+    font-size: .85rem;
+  }
+  .rival-row .rival-name { font-weight: 700; color: #fff; }
+  .rival-row .stat-g { color: #4ade80; font-weight: 700; text-align: center; }
+  .rival-row .stat-e { color: #f5c518; font-weight: 700; text-align: center; }
+  .rival-row .stat-p { color: #f87171; font-weight: 700; text-align: center; }
+  .rival-row .stat-pj { color: #888; font-weight: 600; text-align: center; }
+  .rival-header {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto;
+    gap: 8px;
+    padding: 4px 12px;
+    font-size: .7rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    font-weight: 700;
+  }
+  .no-data-msg {
+    text-align: center;
+    color: #666;
+    padding: 30px;
+    font-size: .9rem;
+  }
+
   @media (max-width:480px) {
     .hero-title  { font-size:1.4rem; }
     .match-card { font-size:.82rem; padding:8px 10px; }
@@ -530,6 +587,128 @@ def get_birthdays_this_month(df_players: pd.DataFrame) -> list[dict]:
 
     cumples.sort(key=lambda x: x["Dia"])
     return cumples
+
+
+# --------------------------------------------------------------------------- #
+# Supabase - Datos históricos
+# --------------------------------------------------------------------------- #
+
+def _supabase_config() -> tuple[str, str] | None:
+    """Obtiene URL y key de Supabase desde st.secrets."""
+    try:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        return url, key
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def query_supabase(table: str, params: str = "") -> pd.DataFrame:
+    """Consulta una tabla o vista de Supabase via REST API."""
+    import urllib.request
+    import json
+
+    config = _supabase_config()
+    if not config:
+        return pd.DataFrame()
+
+    url_base, key = config
+    url = f"{url_base}/rest/v1/{table}?select=*"
+    if params:
+        url += f"&{params}"
+
+    req = urllib.request.Request(url, headers={
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    })
+
+    try:
+        resp = urllib.request.urlopen(req)
+        data = json.loads(resp.read().decode("utf-8"))
+        if data:
+            return pd.DataFrame(data)
+        return pd.DataFrame()
+    except Exception as e:
+        return pd.DataFrame()
+
+
+def load_goleadores_historicos() -> pd.DataFrame:
+    """Carga ranking histórico de goleadores desde Supabase."""
+    df = query_supabase("v_goleadores_historicos")
+    if not df.empty:
+        df = df.sort_values("goles_totales", ascending=False).reset_index(drop=True)
+    return df
+
+
+def load_historial_rivales() -> pd.DataFrame:
+    """Carga historial de Spartan contra cada rival desde Supabase."""
+    df = query_supabase("v_historial_rivales")
+    if not df.empty:
+        df = df.sort_values("partidos", ascending=False).reset_index(drop=True)
+    return df
+
+
+def load_torneos_historicos() -> pd.DataFrame:
+    """Carga lista de torneos archivados."""
+    return query_supabase("torneos", "order=anio.desc,nombre.desc")
+
+
+def load_partidos_torneo(torneo_nombre: str, serie: str) -> pd.DataFrame:
+    """Carga partidos de un torneo específico desde Supabase."""
+    import urllib.parse
+
+    # Consulta con joins
+    config = _supabase_config()
+    if not config:
+        return pd.DataFrame()
+
+    import urllib.request
+    import json
+
+    url_base, key = config
+
+    # Obtener fase_id
+    fases_df = query_supabase("fases", f"serie=eq.{serie}&torneo_id=in.(select id from torneos where nombre=eq.{urllib.parse.quote(torneo_nombre)})")
+
+    # Usar approach más simple: cargar partidos con equipo info
+    url = (
+        f"{url_base}/rest/v1/partidos?"
+        f"select=fecha_numero,goles_local,goles_visita,"
+        f"local:equipos!partidos_local_id_fkey(nombre),"
+        f"visita:equipos!partidos_visita_id_fkey(nombre),"
+        f"fase:fases!inner(nombre,serie,torneo:torneos!inner(nombre))"
+        f"&fase.torneo.nombre=eq.{urllib.parse.quote(torneo_nombre)}"
+        f"&fase.serie=eq.{serie}"
+        f"&order=fecha_numero.asc"
+    )
+
+    req = urllib.request.Request(url, headers={
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    })
+
+    try:
+        resp = urllib.request.urlopen(req)
+        data = json.loads(resp.read().decode("utf-8"))
+        if not data:
+            return pd.DataFrame()
+
+        rows = []
+        for d in data:
+            rows.append({
+                "Fecha": d.get("fecha_numero", ""),
+                "Local": d.get("local", {}).get("nombre", ""),
+                "Visita": d.get("visita", {}).get("nombre", ""),
+                "Goles L": d.get("goles_local"),
+                "Goles V": d.get("goles_visita"),
+                "Fase": d.get("fase", {}).get("nombre", ""),
+            })
+        return pd.DataFrame(rows)
+    except Exception:
+        return pd.DataFrame()
 
 
 # --------------------------------------------------------------------------- #
@@ -1088,6 +1267,138 @@ def render_footer():
 
 
 # --------------------------------------------------------------------------- #
+# Tab Histórico
+# --------------------------------------------------------------------------- #
+
+def render_goleadores_historicos():
+    """Renderiza ranking de goleadores históricos."""
+    df = load_goleadores_historicos()
+    if df.empty:
+        st.markdown('<div class="no-data-msg">No hay datos históricos disponibles aún.</div>', unsafe_allow_html=True)
+        return
+
+    st.markdown("### 🥅 Goleadores Históricos de Spartan")
+    st.caption(f"Ranking acumulado en todos los campeonatos")
+    st.markdown("")
+
+    medals = ["🥇", "🥈", "🥉"]
+    html_parts = []
+    for i, (_, row) in enumerate(df.iterrows()):
+        pos = medals[i] if i < 3 else f"{i+1}."
+        torneos_txt = f"{int(row['torneos_jugados'])} torneo{'s' if row['torneos_jugados'] > 1 else ''}"
+        html_parts.append(
+            f'<div class="hist-stat">'
+            f'<div><span style="margin-right:8px;">{pos}</span>'
+            f'<span class="name">{row["jugador"]}</span>'
+            f'<br><span class="detail">{torneos_txt}</span></div>'
+            f'<div class="value">{int(row["goles_totales"])}</div>'
+            f'</div>'
+        )
+
+    st.markdown(''.join(html_parts), unsafe_allow_html=True)
+
+
+def render_historial_rivales():
+    """Renderiza historial de Spartan contra cada rival."""
+    df = load_historial_rivales()
+    if df.empty:
+        st.markdown('<div class="no-data-msg">No hay datos históricos disponibles aún.</div>', unsafe_allow_html=True)
+        return
+
+    st.markdown("### ⚔️ Historial contra Rivales")
+    st.caption("Record histórico de Spartan F.C.")
+    st.markdown("")
+
+    # Header
+    html = '<div class="rival-header">'
+    html += '<div>Rival</div><div style="text-align:center;">PJ</div>'
+    html += '<div style="text-align:center;">G</div><div style="text-align:center;">E</div>'
+    html += '<div style="text-align:center;">P</div></div>'
+
+    for _, row in df.iterrows():
+        v = int(row["victorias"])
+        e = int(row["empates"])
+        d = int(row["derrotas"])
+        pj = int(row["partidos"])
+        gf = int(row["gf"])
+        gc = int(row["gc"])
+
+        html += f'<div class="rival-row">'
+        html += f'<div class="rival-name">{row["rival"]}<br><span class="detail">{gf} GF · {gc} GC</span></div>'
+        html += f'<div class="stat-pj">{pj}</div>'
+        html += f'<div class="stat-g">{v}</div>'
+        html += f'<div class="stat-e">{e}</div>'
+        html += f'<div class="stat-p">{d}</div>'
+        html += f'</div>'
+
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def render_torneos_anteriores(serie: str):
+    """Renderiza resumen de torneos archivados."""
+    df_torneos = load_torneos_historicos()
+    if df_torneos.empty:
+        st.markdown('<div class="no-data-msg">No hay torneos archivados aún.</div>', unsafe_allow_html=True)
+        return
+
+    st.markdown("### 🏆 Torneos Anteriores")
+    st.caption("Resultados archivados por campeonato")
+    st.markdown("")
+
+    for _, torneo in df_torneos.iterrows():
+        torneo_nombre = torneo["nombre"]
+        with st.expander(f"🏆 {torneo_nombre}", expanded=False):
+            df_partidos = load_partidos_torneo(torneo_nombre, serie)
+            if df_partidos.empty:
+                st.caption(f"Sin partidos registrados en Serie {serie}")
+                continue
+
+            # Calcular tabla de posiciones del torneo histórico
+            tabla = compute_standings(df_partidos)
+            if not tabla.empty:
+                render_standings(tabla)
+
+            # Mostrar resultados de Spartan
+            spartan_mask = (
+                df_partidos["Local"].str.contains(SPARTAN_NAME, na=False) |
+                df_partidos["Visita"].str.contains(SPARTAN_NAME, na=False)
+            )
+            df_spartan = df_partidos[spartan_mask]
+            if not df_spartan.empty:
+                jugados = df_spartan[df_spartan["Goles L"].notna()]
+                if not jugados.empty:
+                    st.markdown(f"**Partidos de Spartan:** {len(jugados)} jugados")
+                    for _, row in jugados.iterrows():
+                        gl = int(row["Goles L"]) if pd.notna(row["Goles L"]) else "-"
+                        gv = int(row["Goles V"]) if pd.notna(row["Goles V"]) else "-"
+                        st.markdown(
+                            f'<div class="match-card">'
+                            f'<div class="team-local">{_hl(row["Local"])}</div>'
+                            f'<div class="score">{gl} · {gv}</div>'
+                            f'<div class="team-visita">{_hl(row["Visita"])}</div>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+
+
+def render_historico_tab(serie: str):
+    """Renderiza el tab completo de Histórico."""
+    config = _supabase_config()
+    if not config:
+        st.warning("⚠️ Supabase no está configurado. Agrega las credenciales en Settings → Secrets de Streamlit Cloud.")
+        return
+
+    sub_tabs = st.tabs(["🥅 Goleadores", "⚔️ vs Rivales", "🏆 Torneos"])
+
+    with sub_tabs[0]:
+        render_goleadores_historicos()
+    with sub_tabs[1]:
+        render_historial_rivales()
+    with sub_tabs[2]:
+        render_torneos_anteriores(serie)
+
+
+# --------------------------------------------------------------------------- #
 # Tab Estadísticas
 # --------------------------------------------------------------------------- #
 
@@ -1200,8 +1511,8 @@ def main():
         corte_pos = CLASIFICACION["45"]["corte_oro_por_grupo"]
         corte_labels = ("Clasifican a Copa de Oro", "Copa de Plata")
 
-    # 4 Tabs principales
-    main_tabs = st.tabs(["📊 Estadísticas", "👥 Plantel", "🎂 Cumpleaños", "🟥 Tarjetas"])
+    # 5 Tabs principales
+    main_tabs = st.tabs(["📊 Estadísticas", "👥 Plantel", "🎂 Cumpleaños", "🟥 Tarjetas", "📜 Histórico"])
 
     with main_tabs[0]:
         if not df_fase.empty:
@@ -1228,6 +1539,9 @@ def main():
             render_red_cards(df_players)
         else:
             st.info("No hay datos de jugadores para esta serie.")
+
+    with main_tabs[4]:
+        render_historico_tab(serie)
 
     # Footer
     render_footer()
